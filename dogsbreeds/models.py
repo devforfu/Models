@@ -5,8 +5,6 @@ Each model is represented as an instance of some template class which tracks
 information required to instantiate and train models, like preprocessing
 function, input size, etc.
 """
-import importlib
-
 from keras.models import Model
 from keras.optimizers import SGD
 from keras.layers import Dense
@@ -16,15 +14,6 @@ from keras.layers import GlobalAveragePooling2D
 
 
 _registry = {}
-
-
-def preprocessing(name):
-    try:
-        module = importlib.import_module(f'keras.applications.{name}')
-    except ModuleNotFoundError:
-        raise ValueError(
-            f'there is no Keras application with name {name}')
-    return getattr(module, 'preprocess_input', identity)
 
 
 def get_model(name: str):
