@@ -32,7 +32,7 @@ def download_dataset(name, output, timeout=600):
             if process.poll() is None:
                 raw_output = process.stdout.readline()
                 decoded = raw_output.decode(encoding='utf-8')
-                if not output:
+                if not decoded:
                     continue
                 print(decoded.strip('\n'))
             else:
