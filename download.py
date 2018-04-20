@@ -18,11 +18,16 @@ from subprocess import Popen, PIPE
 
 def download_dataset(name, output, timeout=600):
     """Downloads dataset using Kaggle API."""
+    if output is None:
+        home = os.path.expanduser('~/data/')
+        folder = os.path.expandvars(os.environ.get('KAGGLE_DATASETS', home))
+        output = os.path.join(folder, name)
 
     script = os.path.join(os.path.dirname(sys.executable), 'kaggle')
     cmd = f'{script} competitions download -c {name} -p {output}'
     process = Popen(cmd, stdout=PIPE, bufsize=1, close_fds=True, shell=True)
     time_limit = time.time() + timeout
+    print('Downloading dataset into folder', output)
 
     while True:
         try:
@@ -76,10 +81,10 @@ def main():
     parser.add_argument(
         '-n', '--name', required=True, help='Competition name')
     parser.add_argument(
-        '-p', '--path', required=True, help='Path to save competition files')
+        '-p', '--path', required=False, help='Path to save competition files')
     args = parser.parse_args()
 
-    if os.path.exists(args.path):
+    if args.path is not None and os.path.exists(args.path):
         print('Warning: path already exists:', args.path, 'Terminating...')
         sys.exit(1)
 
