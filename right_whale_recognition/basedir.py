@@ -17,6 +17,3 @@ TEST_DATA = join(PREPARED_DATA, 'test')
 TRAIN_DATA = join(PREPARED_DATA, 'train')
 VALID_DATA = join(PREPARED_DATA, 'valid')
 EXTENDED_LABELS = join(PREPARED_DATA, 'labels.csv')
-
-# mock data to validate custom algorithms
-MNIST_IMAGES = expanduser('~/data/mnist')

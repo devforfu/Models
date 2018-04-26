@@ -1,12 +1,10 @@
+import re
 from collections import defaultdict, OrderedDict
 
+import numpy as np
 import tensorflow as tf
 
-
-def add_to_collection(name, *ops):
-    """Combines group of tensors into collection."""
-    for op in ops:
-        tf.add_to_collection(name, op)
+from data import get_mnist
 
 
 class Model:
@@ -57,8 +55,22 @@ class Model:
             training_op, metrics = self.create_optimizer(model, inputs)
             add_to_collection('inputs', *inputs.values())
             add_to_collection('metrics', *metrics.values())
-            add_to_collection('training', training_op, model)
+            add_to_collection('model', *model.values())
+            add_to_collection('training', training_op)
         self._graph = graph
+
+    def fit(self, X, y, epochs, lr0=1e-4, batch_size=32,
+            validation_data=None, callbacks=None):
+
+        generator = ArrayBatchGenerator(
+            X, y,
+            infinite=True,
+            batch_size=batch_size,
+            shuffle_on_restart=True)
+
+        return self.fit_generator(
+            generator, epochs, generator.n_batches, lr0,
+            validation_data, callbacks)
 
     def fit_generator(self, generator, epochs, batches_per_epoch,
                       lr0=10e-4, validation_data=None,
@@ -70,9 +82,9 @@ class Model:
         graph = self.graph
 
         with graph.as_default():
-            inputs = tf.get_collection('inputs')
-            metrics = tf.get_collection('metrics')
-            model, training_op = tf.get_collection('training')
+            inputs = get_collection('inputs')
+            metrics = get_collection('metrics')
+            training_op = get_collection('training')
             init = tf.global_variables_initializer()
             self._saver = tf.train.Saver()
 
@@ -80,36 +92,37 @@ class Model:
         self._session = session = tf.Session(graph=graph)
         init.run(session=session)
         for epoch in range(1, epochs + 1):
-            stats = {'epoch': epoch}
+            stats = OrderedDict()
+            stats['epoch'] = epoch
             epoch_metrics = defaultdict(lambda: 0)
             for batch_index in range(batches_per_epoch):
                 batches = next(generator)
                 feed = self.generate_feed(batches, inputs, lr=lr0)
                 session.run([training_op], feed)
-                values = session.run(metrics, feed)
-                for metric, value in zip(metrics, values):
-                    epoch_metrics[metric.name] += value
-            stats.update({k: v/batches_per_epoch for k, v in epoch_metrics})
+                batch_metrics = session.run(metrics, feed)
+                for metric, value in batch_metrics.items():
+                    epoch_metrics[metric] += value
+            for k, v in epoch_metrics.items():
+                stats[k] = v/batches_per_epoch
             if validation_data:
                 feed = self.generate_feed(validation_data, inputs, train=False)
-                val_values = session.run(metrics, feed)
-                val_metrics = {}
-                for metric, value in zip(metrics, val_values):
-                    val_metrics['val_' + metric.name] = value
-                stats.update(val_metrics)
+                valid_metrics = session.run(metrics, feed)
+                for metric, value in valid_metrics.items():
+                    stats['val_' + metric] = value
             history.append(stats)
+            print(as_string(stats))
 
         return history
 
 
 class DenseNetworkClassifer(Model):
 
-    def __init__(self, input_shape, config, n_classes,
+    def __init__(self, input_size, config, n_classes,
                  optimizer=tf.train.GradientDescentOptimizer,
                  activation=tf.nn.relu):
 
         super().__init__()
-        self.input_shape = input_shape
+        self.input_size = input_size
         self.config = config
         self.n_classes = n_classes
         self.optimizer = optimizer
@@ -117,13 +130,11 @@ class DenseNetworkClassifer(Model):
 
     def create_inputs(self):
         with tf.name_scope('inputs'):
-            x = tf.placeholder(tf.float32,
-                               shape=(None, self.input_shape),
-                               name='x')
-            y = tf.placeholder(tf.float32,
-                               shape=(None,),
-                               name='y')
-            lr = tf.placeholder(tf.float32, name='learing_rate')
+            x = tf.placeholder(
+                tf.float32, shape=(None, self.input_size), name='x')
+            y = tf.placeholder(
+                tf.float32, shape=(None, self.n_classes), name='y')
+            lr = tf.placeholder(tf.float32, name='learning_rate')
             training = tf.placeholder(tf.bool, name='training')
         inputs = OrderedDict([
             ('x', x),
@@ -138,8 +149,7 @@ class DenseNetworkClassifer(Model):
             x = inputs['x']
             for layer_config in self.config:
                 layer = Dense(**layer_config)
-                layer.build(x)
-                x = layer
+                x = layer.build(x, training=inputs['training'])
             logits = tf.layers.dense(x, units=self.n_classes, name='logits')
             activate = tf.nn.sigmoid if self.n_classes == 2 else tf.nn.softmax
             probabilities = activate(logits, name='predictions')
@@ -165,8 +175,8 @@ class DenseNetworkClassifer(Model):
             accuracy = tf.reduce_mean(match, name='accuracy')
 
         metrics = OrderedDict([('loss', loss), ('accuracy', accuracy)])
-        with tf.name_scope('train'):
-            opt = self.optimizer(inputs['lr'])
+        with tf.name_scope('training'):
+            opt = self.optimizer(inputs['learning_rate'])
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 training_op = opt.minimize(loss)
@@ -174,7 +184,7 @@ class DenseNetworkClassifer(Model):
         return training_op, metrics
 
     def generate_feed(self, batches, inputs, train=True, lr=10e-4):
-        x_batch, y_batch = next(batches)
+        x_batch, y_batch = batches
         x, y, learning_rate, training = inputs.values()
         feed = {x: x_batch, y: y_batch, learning_rate: lr, training: train}
         return feed
@@ -184,7 +194,7 @@ class Dense:
     """
     Fully-connected layer blueprint.
     """
-    def __init__(self, units, dropout=None, batch_norm=False,
+    def __init__(self, units, dropout=None, batch_norm=True,
                  activation=None, name=None):
 
         self.units = units
@@ -199,15 +209,127 @@ class Dense:
             inputs=x, units=self.units,
             activation=None, kernel_initializer=init)
         if self.batch_norm:
+            if training is None:
+                raise ValueError(
+                    'cannot add batch normalization without training switch')
             x = tf.layers.batch_normalization(x, training=training)
-        x = self.activation(x)
+        if self.activation is not None:
+            x = self.activation(x)
         if self.dropout is not None:
             x = tf.layers.dropout(x, rate=self.dropout)
         return x
 
 
+class ArrayBatchGenerator:
+    def __init__(self, *arrays, same_size_batches=False, batch_size=32,
+                 infinite=False, shuffle_on_restart=False):
+
+        assert same_length(arrays)
+        self.same_size_batches = same_size_batches
+        self.batch_size = batch_size
+        self.infinite = infinite
+        self.shuffle_on_restart = shuffle_on_restart
+
+        total = len(arrays[0])
+        n_batches = total // batch_size
+        if same_size_batches and (total % batch_size != 0):
+            n_batches += 1
+
+        self.array_size = len(arrays[0])
+        self.current_batch = 0
+        self.n_batches = n_batches
+        self.arrays = list(arrays)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.next()
+
+    def next(self):
+        if self.current_batch == self.n_batches:
+            if not self.infinite:
+                raise StopIteration()
+            self.current_batch = 0
+            if self.shuffle_on_restart:
+                index = np.random.permutation(self.array_size)
+                self.arrays = [arr[index] for arr in self.arrays]
+
+        start = self.current_batch * self.batch_size
+        batches = [arr[start:(start + self.batch_size)] for arr in self.arrays]
+        self.current_batch += 1
+        return batches
+
+
+def same_length(*arrays):
+    first, *rest = arrays
+    n = len(first)
+    for arr in rest:
+        if len(arr) != n:
+            return False
+    return True
+
+
+def add_to_collection(name, *ops):
+    """Combines group of tensors into collection."""
+    for op in ops:
+        tf.add_to_collection(name, op)
+
+
+def get_collection(name):
+    ops = OrderedDict()
+    for op in tf.get_collection(name):
+        match = re.match(f'^{name}/(\w+)(:\d)?', op.name)
+        short_name, *_ = match.groups()
+        ops[short_name] = op
+    if len(ops) == 1:
+        return list(ops.values())[0]
+    return ops
+
+
+def as_string(dictionary, stats_formats=None):
+    if stats_formats is None:
+        stats_formats = OrderedDict()
+        stats_formats['epoch'] = '05d'
+        stats_formats['loss'] = '2.6f'
+        stats_formats['val_loss'] = '2.6f'
+        stats_formats['accuracy'] = '2.2%'
+        stats_formats['val_accuracy'] = '2.2%'
+
+    format_strings = [
+        '%s: {%s:%s}' % (name, name, value)
+        for name, value in stats_formats.items()]
+    format_string = ' - '.join(format_strings)
+    return format_string.format(**dictionary)
+
+
 def main():
-    pass
+    dataset = get_mnist()
+    x_train, y_train = dataset['train']
+    num_features = x_train.shape[1]
+    num_classes = dataset['n_classes']
+
+    blueprint = [
+        {'units': 300},
+        {'units': 300},
+        {'units': 300, 'dropout': 0.5},
+        {'units': 300, 'dropout': 0.5}]
+
+    model = DenseNetworkClassifer(
+        input_size=num_features,
+        n_classes=num_classes,
+        config=blueprint,
+        activation=tf.nn.elu)
+
+    model.build()
+
+    model.fit(
+        X=x_train,
+        y=y_train,
+        batch_size=2000,
+        epochs=100,
+        lr0=1e-2,
+        validation_data=dataset['valid'])
 
 
 if __name__ == '__main__':
