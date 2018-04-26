@@ -7,6 +7,7 @@ from os.path import exists
 import numpy as np
 from tqdm import tqdm
 from swissknife.config import console_logger
+from swissknife.kaggle.datasets import KaggleTestImagesIterator
 from swissknife.kaggle.datasets import KaggleClassifiedImagesSource
 
 from pretrained import MODELS, get_pretrained_model
