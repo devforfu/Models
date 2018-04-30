@@ -28,31 +28,38 @@ class Model:
     def saver(self):
         return self._saver
 
-    def create_inputs(self):
-        """Creates placeholders required to feed into model."""
-        raise NotImplementedError()
-
-    def build_model(self):
-        """Creates model using input tensors."""
-        raise NotImplementedError()
-
-    def create_optimizer(self):
-        """Creates model optimizer."""
-        raise NotImplementedError()
-
     def generate_feed(self, batches, inputs, **params):
         """Creates a dictionary with tensors and their values to be fed
-        into session.
-        """
-        raise NotImplementedError()
+        into session's training method.
 
-    def build(self, graph=None):
+        Default implementation uses X and y batch, learning rate value and
+        training flags to create required dictionary.
+        """
+        x_batch, y_batch = batches
+        x, y, learning_rate, training = inputs.values()
+        train = params.get('train', True)
+        lr = params.get('learning_rate', 0.001)
+        feed = {x: x_batch, y: y_batch, learning_rate: lr, training: train}
+        return feed
+
+    def build(self, optimizer=None, graph=None):
+        """Builds model.
+
+        Default building procedure expects inheriting classes to override
+        `create_inputs`, `build_model` and `create_optimizer` methods which
+        should create tensors required for model.
+
+        Args:
+            optimizer: Optimizer class object.
+            graph: Graph where model's tensors are added.
+
+        """
         if graph is None:
             graph = tf.Graph()
         with graph.as_default():
             self.create_inputs()
             self.build_model()
-            self.create_optimizer()
+            self.create_optimizer(optimizer)
         self._graph = graph
 
     def fit(self, X, y, epochs, lr0=1e-4, batch_size=32,
@@ -107,18 +114,27 @@ class Model:
 
         return history
 
+    def create_inputs(self):
+        """Creates placeholders required to feed into model."""
+        raise NotImplementedError()
+
+    def build_model(self):
+        """Creates model using input tensors."""
+        raise NotImplementedError()
+
+    def create_optimizer(self, optimizer):
+        """Creates model optimizer."""
+        raise NotImplementedError()
+
 
 class DenseNetworkClassifer(Model):
 
-    def __init__(self, input_size, config, n_classes,
-                 optimizer=tf.train.GradientDescentOptimizer,
-                 activation=tf.nn.relu):
+    def __init__(self, input_size, config, n_classes, activation=tf.nn.relu):
 
         super().__init__()
         self.input_size = input_size
         self.config = config
         self.n_classes = n_classes
-        self.optimizer = optimizer
         self.activation = activation
 
     def create_inputs(self):
@@ -145,7 +161,7 @@ class DenseNetworkClassifer(Model):
             predictions = tf.argmax(probabilities, axis=1, name='predictions')
         add_to_collection('model', logits, probabilities, predictions)
 
-    def create_optimizer(self):
+    def create_optimizer(self, optimizer=None):
         model = get_collection('model')
         inputs = get_collection('inputs')
 
@@ -167,17 +183,13 @@ class DenseNetworkClassifer(Model):
         add_to_collection('metrics', loss, accuracy)
 
         with tf.name_scope('training'):
-            opt = self.optimizer(inputs['learning_rate'])
+            if optimizer is None:
+                optimizer = tf.train.GradientDescentOptimizer
+            opt = optimizer(inputs['learning_rate'])
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 training_op = opt.minimize(loss)
         add_to_collection('training', training_op)
-
-    def generate_feed(self, batches, inputs, train=True, lr=10e-4):
-        x_batch, y_batch = batches
-        x, y, learning_rate, training = inputs.values()
-        feed = {x: x_batch, y: y_batch, learning_rate: lr, training: train}
-        return feed
 
 
 class Dense:
@@ -314,10 +326,9 @@ def main():
         input_size=num_features,
         n_classes=num_classes,
         config=blueprint,
-        optimizer=tf.train.AdamOptimizer,
         activation=tf.nn.elu)
 
-    model.build()
+    model.build(optimizer=tf.train.AdamOptimizer)
 
     model.fit(
         X=x_train,
