@@ -7,6 +7,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from tensorflow.examples.tutorials.mnist import input_data
 
 from basedir import MNIST_IMAGES
+from data import get_features, get_mnist
 
 
 class ArrayBatchGenerator:

@@ -32,11 +32,11 @@ class Model:
         """Creates placeholders required to feed into model."""
         raise NotImplementedError()
 
-    def build_model(self, inputs: dict):
+    def build_model(self):
         """Creates model using input tensors."""
         raise NotImplementedError()
 
-    def create_optimizer(self, model, inputs):
+    def create_optimizer(self):
         """Creates model optimizer."""
         raise NotImplementedError()
 
@@ -50,24 +50,18 @@ class Model:
         if graph is None:
             graph = tf.Graph()
         with graph.as_default():
-            inputs = self.create_inputs()
-            model = self.build_model(inputs)
-            training_op, metrics = self.create_optimizer(model, inputs)
-            add_to_collection('inputs', *inputs.values())
-            add_to_collection('metrics', *metrics.values())
-            add_to_collection('model', *model.values())
-            add_to_collection('training', training_op)
+            self.create_inputs()
+            self.build_model()
+            self.create_optimizer()
         self._graph = graph
 
     def fit(self, X, y, epochs, lr0=1e-4, batch_size=32,
             validation_data=None, callbacks=None):
 
         generator = ArrayBatchGenerator(
-            X, y,
-            infinite=True,
+            X, y, infinite=True,
             batch_size=batch_size,
             shuffle_on_restart=True)
-
         return self.fit_generator(
             generator, epochs, generator.n_batches, lr0,
             validation_data, callbacks)
@@ -80,7 +74,6 @@ class Model:
             self._session.close()
 
         graph = self.graph
-
         with graph.as_default():
             inputs = get_collection('inputs')
             metrics = get_collection('metrics')
@@ -130,21 +123,17 @@ class DenseNetworkClassifer(Model):
 
     def create_inputs(self):
         with tf.name_scope('inputs'):
-            x = tf.placeholder(
-                tf.float32, shape=(None, self.input_size), name='x')
-            y = tf.placeholder(
-                tf.float32, shape=(None, self.n_classes), name='y')
-            lr = tf.placeholder(tf.float32, name='learning_rate')
-            training = tf.placeholder(tf.bool, name='training')
-        inputs = OrderedDict([
-            ('x', x),
-            ('y', y),
-            ('learning_rate', lr),
-            ('training', training)
-        ])
-        return inputs
+            tensors = [
+                tf.placeholder(
+                    tf.float32, shape=(None, self.input_size), name='x'),
+                tf.placeholder(
+                    tf.float32, shape=(None, self.n_classes), name='y'),
+                tf.placeholder(tf.float32, name='learning_rate'),
+                tf.placeholder(tf.bool, name='training')]
+            add_to_collection('inputs', *tensors)
 
-    def build_model(self, inputs: dict):
+    def build_model(self):
+        inputs = get_collection('inputs')
         with tf.name_scope('model'):
             x = inputs['x']
             for layer_config in self.config:
@@ -152,19 +141,21 @@ class DenseNetworkClassifer(Model):
                 x = layer.build(x, training=inputs['training'])
             logits = tf.layers.dense(x, units=self.n_classes, name='logits')
             activate = tf.nn.sigmoid if self.n_classes == 2 else tf.nn.softmax
-            probabilities = activate(logits, name='predictions')
+            probabilities = activate(logits, name='probabilities')
             predictions = tf.argmax(probabilities, axis=1, name='predictions')
-        model = OrderedDict([
-            ('logits', logits),
-            ('probabilities', probabilities),
-            ('predictions', predictions)
-        ])
-        return model
+        add_to_collection('model', logits, probabilities, predictions)
 
-    def create_optimizer(self, model, inputs):
-        x, y = inputs['x'], inputs['y']
-        logits, probabilities, predictions = (
-            model['logits'], model['probabilities'], model['predictions'])
+    def create_optimizer(self):
+        model = get_collection('model')
+        inputs = get_collection('inputs')
+
+        x, y, logits, probabilities, predictions = (
+            inputs['x'],
+            inputs['y'],
+            model['logits'],
+            model['probabilities'],
+            model['predictions']
+        )
 
         with tf.name_scope('metrics'):
             xe = tf.nn.softmax_cross_entropy_with_logits(
@@ -173,15 +164,14 @@ class DenseNetworkClassifer(Model):
             targets = tf.argmax(y, axis=1, name='targets')
             match = tf.cast(tf.equal(predictions, targets), tf.float32)
             accuracy = tf.reduce_mean(match, name='accuracy')
+        add_to_collection('metrics', loss, accuracy)
 
-        metrics = OrderedDict([('loss', loss), ('accuracy', accuracy)])
         with tf.name_scope('training'):
             opt = self.optimizer(inputs['learning_rate'])
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 training_op = opt.minimize(loss)
-
-        return training_op, metrics
+        add_to_collection('training', training_op)
 
     def generate_feed(self, batches, inputs, train=True, lr=10e-4):
         x_batch, y_batch = batches
@@ -195,7 +185,7 @@ class Dense:
     Fully-connected layer blueprint.
     """
     def __init__(self, units, dropout=None, batch_norm=True,
-                 activation=None, name=None):
+                 activation=tf.nn.relu, name=None):
 
         self.units = units
         self.dropout = dropout
@@ -213,10 +203,10 @@ class Dense:
                 raise ValueError(
                     'cannot add batch normalization without training switch')
             x = tf.layers.batch_normalization(x, training=training)
-        if self.activation is not None:
-            x = self.activation(x)
         if self.dropout is not None:
             x = tf.layers.dropout(x, rate=self.dropout)
+        if self.activation is not None:
+            x = self.activation(x)
         return x
 
 
@@ -279,12 +269,16 @@ def add_to_collection(name, *ops):
 def get_collection(name):
     ops = OrderedDict()
     for op in tf.get_collection(name):
-        match = re.match(f'^{name}/(\w+)(:\d)?', op.name)
-        short_name, *_ = match.groups()
-        ops[short_name] = op
+        ops[short_name(name, op.name)] = op
     if len(ops) == 1:
         return list(ops.values())[0]
     return ops
+
+
+def short_name(collection_name, tensor_name):
+    match = re.match(f'^{collection_name}/(\w+)(:\d)?', tensor_name)
+    name, *_ = match.groups()
+    return name
 
 
 def as_string(dictionary, stats_formats=None):
@@ -310,15 +304,17 @@ def main():
     num_classes = dataset['n_classes']
 
     blueprint = [
-        {'units': 300},
-        {'units': 300},
-        {'units': 300, 'dropout': 0.5},
-        {'units': 300, 'dropout': 0.5}]
+        {'units': 300, 'dropout': 0.50},
+        {'units': 300, 'dropout': 0.50},
+        {'units': 200, 'dropout': 0.25},
+        {'units': 200, 'dropout': 0.25},
+        {'units': 100}]
 
     model = DenseNetworkClassifer(
         input_size=num_features,
         n_classes=num_classes,
         config=blueprint,
+        optimizer=tf.train.AdamOptimizer,
         activation=tf.nn.elu)
 
     model.build()
@@ -326,9 +322,9 @@ def main():
     model.fit(
         X=x_train,
         y=y_train,
-        batch_size=2000,
-        epochs=100,
-        lr0=1e-2,
+        batch_size=1000,
+        epochs=200,
+        lr0=0.01,
         validation_data=dataset['valid'])
 
 
