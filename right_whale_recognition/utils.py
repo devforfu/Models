@@ -76,21 +76,6 @@ def short_name(collection_name, tensor_name):
     return name
 
 
-def as_string(dictionary, stats_formats=None):
-    if stats_formats is None:
-        stats_formats = OrderedDict()
-        stats_formats['epoch'] = '05d'
-        stats_formats['loss'] = '2.6f'
-        stats_formats['val_loss'] = '2.6f'
-        stats_formats['accuracy'] = '2.2%'
-        stats_formats['val_accuracy'] = '2.2%'
-
-    format_strings = [
-        '%s: {%s:%s}' % (name, name, value)
-        for name, value in stats_formats.items()]
-    format_string = ' - '.join(format_strings)
-    return format_string.format(**dictionary)
-
 
 def cross_entropy(num_classes, logits, labels, onehot=True):
     assert num_classes >= 2, 'Number of classes cannot be less then 2'
