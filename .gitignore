@@ -6,4 +6,3 @@
 environment.env
 **/*.log
 **/*.(png|jpeg|jpg|pickle|model|ckpt)
-**/model/
