@@ -11,6 +11,7 @@ class Model:
 
     def __init__(self):
         self.training = True
+        self.scheduler = None
         self._graph = None
         self._session = None
         self._saver = None
