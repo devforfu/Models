@@ -4,7 +4,7 @@ from sklearn.utils import compute_class_weight
 
 from data import get_mnist
 from model.base import Model
-from callbacks import StreamLogger
+from callbacks import StreamLogger, ExpoDecay
 from utils import add_to_collection, get_collection, cross_entropy
 
 
@@ -118,14 +118,18 @@ def main():
 
     model.build()
 
+    callbacks = [
+        StreamLogger(),
+        ExpoDecay(decay=0.01)]
+
     model.fit(
         X=x_train,
         y=y_train,
         batch_size=1000,
         epochs=100,
-        lr0=0.01,
+        lr0=1.0,
         validation_data=dataset['valid'],
-        callbacks=[StreamLogger()])
+        callbacks=callbacks)
 
 
 if __name__ == '__main__':

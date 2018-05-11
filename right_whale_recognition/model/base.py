@@ -15,6 +15,8 @@ class Model:
         self._graph = None
         self._session = None
         self._saver = None
+        self._learning_rate = None
+        self._fit_params = {}
 
     @property
     def graph(self):
@@ -27,6 +29,21 @@ class Model:
     @property
     def saver(self):
         return self._saver
+
+    @property
+    def learning_rate(self) -> float:
+        return self._learning_rate
+
+    @learning_rate.setter
+    def learning_rate(self, value: float):
+        self._learning_rate = value
+
+    def get_fit_parameter(self, name):
+        if name not in self._fit_params:
+            raise KeyError(
+                'unknown fit parameter: %s. Please check if the model '
+                'fitting was appropriately invoked' % name)
+        return self._fit_params[name]
 
     def generate_feed(self, tensors, **values):
         """Creates a dictionary with tensors and their values to be fed
@@ -79,6 +96,10 @@ class Model:
         if self._session is not None:
             self._session.close()
 
+        self._learning_rate = lr0
+        self._fit_params['total_epochs'] = epochs
+        self._fit_params['batches_per_epoch'] = batches_per_epoch
+
         graph = self.graph
         with graph.as_default():
             inputs = get_collection('inputs')
@@ -94,18 +115,23 @@ class Model:
         callbacks = CallbacksGroup(callbacks)
         self._session = session = tf.Session(graph=graph)
         init.run(session=session)
+        callbacks.set_model(self)
         callbacks.on_training_start()
         for epoch in range(1, epochs + 1):
             stats = OrderedDict()
             stats['epoch'] = epoch
             epoch_metrics = defaultdict(lambda: 0)
+            callbacks.on_epoch_start(epoch)
             for batch_index in range(batches_per_epoch):
+                callbacks.on_batch_start(epoch, batch_index)
+                stats['learning_rate'] = self._learning_rate
                 x_batch, y_batch = next(generator)
                 feed = self.generate_feed(
                     tensors=inputs, x=x_batch, y=y_batch,
-                    training=True, learning_rate=lr0)
+                    training=True, learning_rate=self._learning_rate)
                 session.run([training_op], feed)
                 batch_metrics = session.run(metrics, feed)
+                callbacks.on_batch_end(epoch, batch_index, batch_metrics)
                 for metric, value in batch_metrics.items():
                     epoch_metrics[metric] += value
             for k, v in epoch_metrics.items():

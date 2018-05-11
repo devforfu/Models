@@ -33,15 +33,19 @@ _formatters = {}
 
 class MetricsFormatter:
 
-    def __init__(self, stats_formats=None):
+    def __init__(self, stats_formats=None, default_format='2.6f'):
         self.stats_formats = stats_formats
+        self.default_format = default_format
 
     def to_string(self, metrics):
         if self.stats_formats is None:
             return str(metrics)
-        format_strings = [
-            '%s: {%s:%s}' % (name, name, value)
-            for name, value in self.stats_formats.items()]
+
+        format_strings = []
+        for name, value in metrics.items():
+            fmt = self.stats_formats.get(name, self.default_format)
+            format_strings.append('%s: {%s:%s}' % (name, name, fmt))
+
         format_string = ' - '.join(format_strings)
         return format_string.format(**metrics)
 
