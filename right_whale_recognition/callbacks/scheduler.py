@@ -21,7 +21,7 @@ class ExpoDecay(Callback):
         self.observed_model = model
 
     def on_epoch_start(self, epoch):
-
+        pass
 
     def on_batch_start(self, epoch, batch_index):
         pass
