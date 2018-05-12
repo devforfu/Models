@@ -7,11 +7,11 @@ from .base import Callback
 class StreamLogger(Callback):
 
     def __init__(self, output=sys.stdout, formatter='default',
-                 format_config=None):
+                 formatter_config=None):
 
         super().__init__()
         self.output = output
-        self.formatter = get_formatter(formatter, format_config)
+        self.formatter = get_formatter(formatter, formatter_config)
 
     def write(self, string):
         self.output.write(string)
@@ -33,9 +33,13 @@ _formatters = {}
 
 class MetricsFormatter:
 
-    def __init__(self, stats_formats=None, default_format='2.6f'):
+    def __init__(self, stats_formats=None, aliases=None,
+                 default_format='2.6f', suppress_metrics=None):
+
         self.stats_formats = stats_formats
+        self.aliases = aliases
         self.default_format = default_format
+        self.suppress_metrics = set(suppress_metrics or [])
 
     def to_string(self, metrics):
         if self.stats_formats is None:
@@ -43,8 +47,11 @@ class MetricsFormatter:
 
         format_strings = []
         for name, value in metrics.items():
+            if name in self.suppress_metrics:
+                continue
             fmt = self.stats_formats.get(name, self.default_format)
-            format_strings.append('%s: {%s:%s}' % (name, name, fmt))
+            short_name = self.aliases.get(name, name)
+            format_strings.append('%s: {%s:%s}' % (short_name, name, fmt))
 
         format_string = ' - '.join(format_strings)
         return format_string.format(**metrics)
@@ -54,6 +61,7 @@ class DefaultFormatter(MetricsFormatter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         if not self.stats_formats:
             stats_formats = OrderedDict()
             stats_formats['epoch'] = '05d'
@@ -62,6 +70,12 @@ class DefaultFormatter(MetricsFormatter):
             stats_formats['accuracy'] = '2.2%'
             stats_formats['val_accuracy'] = '2.2%'
             self.stats_formats = stats_formats
+
+        if not self.aliases:
+            self.aliases = {
+                'learning_rate': 'lr',
+                'val_accuracy': 'val_acc',
+                'accuracy': 'acc'}
 
 
 def _register_formatter(cls, alias=None):
@@ -77,7 +91,8 @@ def get_formatter(name, config=None) -> MetricsFormatter:
         raise ValueError(
             'unexpected formatter name, available formatters are: %s' %
             sorted(list(_formatters.keys())))
-    return _formatters[name](config or {})
+    config = config or {}
+    return _formatters[name](**config)
 
 
 _register_formatter(DefaultFormatter, 'default')

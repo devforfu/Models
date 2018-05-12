@@ -3,12 +3,13 @@ import tensorflow as tf
 from sklearn.utils import compute_class_weight
 
 from data import get_mnist
-from model.base import Model
+from model.base import Classifier
 from callbacks import StreamLogger, ExpoDecay
+from callbacks.stream_logger import DefaultFormatter
 from utils import add_to_collection, get_collection, cross_entropy
 
 
-class LogisticClassifier(Model):
+class LogisticClassifier(Classifier):
 
     def __init__(self, n_features, n_classes, class_weights='balanced',
                  alpha=0.001, l1_ratio=0.15):
@@ -126,10 +127,17 @@ def main():
         X=x_train,
         y=y_train,
         batch_size=1000,
-        epochs=100,
+        epochs=5,
         lr0=1.0,
         validation_data=dataset['valid'],
         callbacks=callbacks)
+
+    x_valid, y_valid = dataset['valid']
+    scores = model.score(x_valid, y_valid)
+    formatter = DefaultFormatter()
+    print(formatter.to_string(scores))
+    classes = model.predict(x_valid)
+    print(classes)
 
 
 if __name__ == '__main__':

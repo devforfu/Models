@@ -1,11 +1,11 @@
 import tensorflow as tf
 
 from data import get_mnist
-from model.base import Model
+from model.base import Classifier
 from utils import get_collection, add_to_collection, cross_entropy
 
 
-class DenseNetworkClassifier(Model):
+class DenseNetworkClassifier(Classifier):
 
     def __init__(self, input_size, config, n_classes, activation=tf.nn.relu):
         super().__init__()

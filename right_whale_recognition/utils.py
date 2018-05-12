@@ -76,7 +76,6 @@ def short_name(collection_name, tensor_name):
     return name
 
 
-
 def cross_entropy(num_classes, logits, labels, onehot=True):
     assert num_classes >= 2, 'Number of classes cannot be less then 2'
     if num_classes == 2:

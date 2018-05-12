@@ -6,8 +6,8 @@ from callbacks.base import CallbacksGroup
 from utils import get_collection, ArrayBatchGenerator
 
 
-class Model:
-    """Base class for all tensorflow-based models."""
+class Classifier:
+    """Base class for all tensorflow-based classifiers."""
 
     def __init__(self):
         self.training = True
@@ -148,6 +148,41 @@ class Model:
         callbacks.on_training_end()
         return history
 
+    def score(self, X, y):
+        """Scores model quality on testing dataset, returning dictionary with
+        model's metrics.
+        """
+        self._check_if_session_exists()
+
+        graph = self.graph
+        with graph.as_default():
+            inputs = get_collection('inputs')
+            metrics = get_collection('metrics')
+
+        feed = self.generate_feed(tensors=inputs, x=X, y=y, training=False)
+        scores = self._session.run(metrics, feed)
+        return scores
+
+    def predict_proba(self, X):
+        """Predicts classes probabilities for dataset."""
+
+        self._check_if_session_exists()
+
+        graph = self.graph
+        with graph.as_default():
+            inputs = get_collection('inputs')
+            model = get_collection('model')
+            probabilities = model['probabilities']
+
+        feed = self.generate_feed(tensors=inputs, x=X, training=False)
+        probs = self._session.run(probabilities, feed)
+        return probs
+
+    def predict(self, X):
+        probs = self.predict_proba(X)
+        classes = probs.argmax(axis=1)
+        return classes
+
     def create_inputs(self):
         """Creates placeholders required to feed into model."""
         raise NotImplementedError()
@@ -159,3 +194,7 @@ class Model:
     def create_optimizer(self, optimizer):
         """Creates model optimizer."""
         raise NotImplementedError()
+
+    def _check_if_session_exists(self):
+        if self._session is None:
+            raise RuntimeError('cannot score model until it is not fit')
