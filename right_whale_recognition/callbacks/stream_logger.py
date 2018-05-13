@@ -7,11 +7,13 @@ from .base import Callback
 class StreamLogger(Callback):
 
     def __init__(self, output=sys.stdout, formatter='default',
-                 formatter_config=None):
+                 formatter_config=None, logging_frequency=1):
 
         super().__init__()
         self.output = output
         self.formatter = get_formatter(formatter, formatter_config)
+        self.logging_frequency = logging_frequency
+        self._counter = None
 
     def write(self, string):
         self.output.write(string)
@@ -19,13 +21,15 @@ class StreamLogger(Callback):
         self.output.flush()
 
     def on_training_start(self):
-        self.write('Model training started')
+        self._counter = 0
 
     def on_training_end(self):
-        self.write('Model training ended')
+        self._counter = None
 
     def on_epoch_end(self, epoch, metrics):
-        self.write(self.formatter.to_string(metrics))
+        self._counter += 1
+        if self._counter % self.logging_frequency == 0:
+            self.write(self.formatter.to_string(metrics))
 
 
 _formatters = {}
