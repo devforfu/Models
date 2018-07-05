@@ -35,6 +35,9 @@ def path(arg, *args):
 #                         Environ variables and paths
 # -----------------------------------------------------------------------------
 
+
+MODELS_FOLDER = get_env_variable(name='TF_MODELS_DIR', default='models')
+
 LFPW_TRAIN = get_env_variable(
     name='LFPW_TRAIN',
     default=path('~', 'data', 'landmarks', 'lfpw', 'trainset'))
