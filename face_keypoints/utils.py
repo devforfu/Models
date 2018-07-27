@@ -1,3 +1,6 @@
+import os
+import re
+from os.path import join
 from pathlib import Path
 from itertools import chain
 
@@ -108,3 +111,29 @@ def to_grayscale(x_batch, y_batch):
         new_image = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
         grayscaled[i, :] = new_image.reshape((w, h, 1))
     return grayscaled, y_batch
+
+
+def best_checkpoint_path(root):
+    def parse_loss(string):
+        try:
+            [loss] = re.findall('_([\d]+\.[\d]+).hdf5$', string)
+            return float(loss)
+        except ValueError:
+            return None
+
+    checkpoints = [int(ts) for ts in os.listdir(root)]
+    most_recent = join(root, str(checkpoints[np.argmax(checkpoints)]))
+
+    best_loss, best_file = np.inf, None
+
+    for filename in os.listdir(most_recent):
+        if not filename.endswith('.hdf5'):
+            continue
+        value = parse_loss(filename)
+        if value is None:
+            continue
+        if value < best_loss:
+            best_loss = value
+            best_file = join(most_recent, filename)
+
+    return best_file

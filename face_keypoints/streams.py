@@ -11,12 +11,8 @@ class AnnotatedImagesStream:
     """
     Yields batches of image and annotation files from the dataset root folder.
     """
-    def __init__(self,
-                 root: str,
-                 batch_size: int=32,
-                 infinite: bool=False,
-                 same_size_batches: bool=False,
-                 images_ext: str='jpg|jpeg|png',
+    def __init__(self, root: str, batch_size: int=32, infinite: bool=False,
+                 same_size_batches: bool=False, images_ext: str='jpg|jpeg|png',
                  points_ext: str='pts'):
 
         self.root = root

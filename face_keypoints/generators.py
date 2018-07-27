@@ -8,25 +8,15 @@ from augmentation import Rotation, Shift, HorizontalFlip, GammaCorrection
 
 class AnnotatedImagesGenerator:
 
-    def __init__(
-            self,
-            root: str,
-            padding: int = 20,
-            batch_size: int = 16,
-            target_size: tuple = (120, 120),
-            infinite: bool = True,
-            same_size_batches: bool = True,
-            augment: bool = True,
-            grayscale: bool = False,
-            shift_x: bool = True,
-            shift_y: bool = True,
-            shift_range: tuple = (-5, 5),
-            rotation_range: tuple = (-10, 10),
-            gamma_range: tuple = (0.5, 1.5),
-            default_probability: float = 0.5,
-            normalize: bool = True,
-            probabilities: dict = None,
-            model_preprocessing=None):
+    def __init__(self, root: str, padding: int=20, batch_size: int=16,
+                 target_size: tuple=(120, 120), infinite: bool=True,
+                 same_size_batches: bool=True, augment: bool=True,
+                 grayscale: bool=False, shift_x: bool=True,
+                 shift_y: bool=True, shift_range: tuple=(-5, 5),
+                 rotation_range: tuple=(-10, 10),
+                 gamma_range: tuple=(0.5, 1.5),
+                 default_probability: float = 0.5, normalize: bool=True,
+                 probabilities: dict=None, model_preprocessing=None):
 
         stream = AnnotatedImagesStream(
             root=root,
