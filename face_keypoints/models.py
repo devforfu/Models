@@ -15,6 +15,7 @@ from keras.layers import Dropout, BatchNormalization
 from keras.layers import GlobalAvgPool2D, GlobalMaxPool2D
 from keras.layers import ZeroPadding2D, MaxPooling2D, AveragePooling2D
 
+from config import NUM_OF_LANDMARKS
 from generators import AnnotatedImagesGenerator
 
 
@@ -42,18 +43,14 @@ class BaseLandmarksModel:
         self.folder = None
         self.history_path = None
         self.weights_path = None
-        self._model = None
+        self._keras_model = None
 
-    def train(
-            self,
-            train_folder: str,
-            valid_folder: str=None,
-            n_epochs: int=100,
-            batch_size: int=32,
-            callbacks: list=None,
-            augment: bool=True,
-            shuffle: bool=True,
-            normalize: bool=True):
+    def create(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def train(self, train_folder: str, valid_folder: str=None,
+              n_epochs: int=100, batch_size: int=32, callbacks: list=None,
+              augment: bool=True, shuffle: bool=True, normalize: bool=True):
 
         train_gen = AnnotatedImagesGenerator(
             root=train_folder,
@@ -74,7 +71,7 @@ class BaseLandmarksModel:
                 augment=False)
             valid_steps = valid_gen.n_batches
 
-        self._model.fit_generator(
+        self._keras_model.fit_generator(
             generator=train_gen,
             steps_per_epoch=train_gen.n_batches,
             validation_data=valid_gen,
@@ -95,3 +92,12 @@ class BaseLandmarksModel:
         self.folder = folder
         self.history_path = history_path
         self.weights_path = weights_path
+
+
+class PretrainedModel(BaseLandmarksModel):
+
+    def create(self, pool: str='flatten', n_dense: int=5,
+               bn: bool=True, l2_reg: float=0.001, freeze: bool=True,
+               n_units: int=500, n_outputs: int=NUM_OF_LANDMARKS*2):
+
+        pass
