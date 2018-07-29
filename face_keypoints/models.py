@@ -38,16 +38,20 @@ def load_custom_model(path):
 
 class BaseLandmarksModel:
 
-    def __init__(self, input_shape, prep_fn):
+    def __init__(self, input_shape):
         self.input_shape = input_shape
         self.folder = None
         self.history_path = None
         self.weights_path = None
         self._keras_model = None
-        self._prep_fn = prep_fn
+        self._prep_fn = None
 
     def create(self, *args, **kwargs):
         raise NotImplementedError()
+
+    def compile(self, optimizer):
+        self._keras_model.compile(
+            loss=root_mean_squared_error, optimizer=optimizer)
 
     def train(self, train_folder: str, valid_folder: str=None,
               n_epochs: int=100, batch_size: int=32, callbacks: list=None,
@@ -83,6 +87,23 @@ class BaseLandmarksModel:
             callbacks=callbacks,
             shuffle=shuffle)
 
+    def predict(self, X, image_coordinates: bool=True):
+        y_pred = self._keras_model.predict(X)
+        if image_coordinates:
+            target_size = self.input_shape[:2]
+            assert target_size[0] == target_size[1]
+            shift = target_size[0] / 2
+            y_pred *= shift
+            y_pred += shift
+        return y_pred
+
+    def predict_generator(self, folder, image_coordinates: bool=True):
+        gen = AnnotatedImagesGenerator(root=folder)
+        y_pred = self._keras_model.predict_generator(gen)
+        if image_coordinates:
+            y_pred = self._rescale_landmarks(y_pred)
+        return y_pred
+
     def create_model_folder(self, root):
         timestamp = datetime.now().strftime('%s')
         folder = join(root, timestamp)
@@ -96,13 +117,19 @@ class BaseLandmarksModel:
         self.history_path = history_path
         self.weights_path = weights_path
 
+    def _rescale_landmarks(self, y):
+        target_size = self.input_shape[:2]
+        assert target_size[0] == target_size[1]
+        shift = target_size[0] / 2
+        return (y + 1)*shift
+
 
 class PretrainedModel(BaseLandmarksModel):
 
-    def create(self, model_fn, pool: str='flatten', n_dense: int=5,
-               n_units: int=500, n_outputs: int=NUM_OF_LANDMARKS*2,
-               freeze: bool=True, bn: bool=True, maxnorm: int=3,
-               l2_reg: float=0.001):
+    def create(self, model_fn, prep_fn=None, pool: str='flatten',
+               n_dense: int=5, n_units: int=500,
+               n_outputs: int=NUM_OF_LANDMARKS*2, freeze: bool=True,
+               bn: bool=True, maxnorm: int=3, l2_reg: float=0.001):
 
         base = model_fn(self.input_shape)
         if freeze:
@@ -125,6 +152,7 @@ class PretrainedModel(BaseLandmarksModel):
             kernel_constraint=_create_if_not_none(l2, l2_reg))(x)
 
         self._keras_model = Model(inputs=base.inputs, outputs=classifier)
+        self._prep_fn = prep_fn
 
 
 def _create_pool_layer(name: str):
