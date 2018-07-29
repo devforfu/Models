@@ -38,12 +38,13 @@ def load_custom_model(path):
 
 class BaseLandmarksModel:
 
-    def __init__(self, input_shape):
+    def __init__(self, input_shape, prep_fn):
         self.input_shape = input_shape
         self.folder = None
         self.history_path = None
         self.weights_path = None
         self._keras_model = None
+        self._prep_fn = prep_fn
 
     def create(self, *args, **kwargs):
         raise NotImplementedError()
@@ -56,6 +57,7 @@ class BaseLandmarksModel:
             root=train_folder,
             batch_size=batch_size,
             target_size=self.input_shape[:2],
+            model_preprocessing=self._prep_fn,
             normalize=normalize,
             augment=augment)
 
@@ -67,6 +69,7 @@ class BaseLandmarksModel:
                 root=valid_folder,
                 batch_size=batch_size,
                 target_size=self.input_shape[:2],
+                model_preprocessing=self._prep_fn,
                 normalize=normalize,
                 augment=False)
             valid_steps = valid_gen.n_batches
@@ -96,8 +99,46 @@ class BaseLandmarksModel:
 
 class PretrainedModel(BaseLandmarksModel):
 
-    def create(self, pool: str='flatten', n_dense: int=5,
-               bn: bool=True, l2_reg: float=0.001, freeze: bool=True,
-               n_units: int=500, n_outputs: int=NUM_OF_LANDMARKS*2):
+    def create(self, model_fn, pool: str='flatten', n_dense: int=5,
+               n_units: int=500, n_outputs: int=NUM_OF_LANDMARKS*2,
+               freeze: bool=True, bn: bool=True, maxnorm: int=3,
+               l2_reg: float=0.001):
 
-        pass
+        base = model_fn(self.input_shape)
+        if freeze:
+            for layer in base.layers:
+                layer.trainable = False
+
+        pool_layer = _create_pool_layer(pool)
+        x = pool_layer(base.output)
+        for _ in range(n_dense):
+            x = Dense(
+                units=n_units,
+                activation='relu',
+                kernel_regularizer=_create_if_not_none(l2, l2_reg))(x)
+            if bn:
+                x = BatchNormalization()(x)
+
+        classifier = Dense(
+            units=n_outputs,
+            activation='linear',
+            kernel_constraint=_create_if_not_none(l2, l2_reg))(x)
+
+        self._keras_model = Model(inputs=base.inputs, outputs=classifier)
+
+
+def _create_pool_layer(name: str):
+    try:
+        layer = {
+            'flatten': Flatten,
+            'avg': GlobalAvgPool2D,
+            'max': GlobalMaxPool2D
+        }[name]
+    except KeyError:
+        raise ValueError('unexpected pool layer: %s' % name)
+    else:
+        return layer()
+
+
+def _create_if_not_none(cls, value):
+    return None if value is None else cls(value)
