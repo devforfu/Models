@@ -1,8 +1,8 @@
 import os
 import re
-from os.path import join
 from pathlib import Path
 from itertools import chain
+from os.path import join, expanduser, expandvars, abspath
 
 import cv2 as cv
 import numpy as np
@@ -137,3 +137,7 @@ def best_checkpoint_path(root):
             best_file = join(most_recent, filename)
 
     return best_file
+
+
+def path(part, *parts):
+    return abspath(expandvars(expanduser(join(part, *parts))))
