@@ -99,7 +99,7 @@ class BaseLandmarksModel:
 
     def predict_generator(self, folder, image_coordinates: bool=True):
         gen = AnnotatedImagesGenerator(root=folder)
-        y_pred = self._keras_model.predict_generator(gen)
+        y_pred = self._keras_model.predict_generator(gen, steps=gen.n_batches)
         if image_coordinates:
             y_pred = self._rescale_landmarks(y_pred)
         return y_pred
@@ -141,8 +141,7 @@ class PretrainedModel(BaseLandmarksModel):
 
         x = _create_pool_layer(pool)(base.output)
         for _ in range(n_dense):
-            reg = _create_if_not_none(MaxNorm, maxnorm)
-            x = Dense(units=n_units, kernel_regularizer=reg)(x)
+            x = Dense(units=n_units)(x)
             if dropout is not None:
                 x = Dropout(dropout)(x)
             if bn:
@@ -152,44 +151,7 @@ class PretrainedModel(BaseLandmarksModel):
         classifier = Dense(units=NUM_OF_LANDMARKS*2, activation='linear')(x)
         model = Model(inputs=base.input, outputs=classifier)
         self._keras_model = model
-
-
-        # base = model_fn(self.input_shape)
-        # base.trainable = not freeze
-        # x = _create_pool_layer(pool)(base.output)
-        # x = Dense(units=500, activation='relu')(x)
-        # x = BatchNormalization()(x)
-        # x = Dense(units=500, activation='relu')(x)
-        # x = BatchNormalization()(x)
-        # x = Dense(units=500, activation='relu')(x)
-        # x = BatchNormalization()(x)
-        # x = Dense(units=NUM_OF_LANDMARKS * 2, activation='linear')(x)
-        #
-        # model = Model(inputs=base.input, outputs=x)
-        #
-        # self._keras_model = model
-
-        # if freeze:
-        #     for layer in base.layers:
-        #         layer.trainable = False
-
-        # pool_layer = _create_pool_layer(pool)
-        # x = pool_layer(base.output)
-        # for _ in range(n_dense):
-        #     x = Dense(
-        #         units=n_units,
-        #         activation='relu',
-        #         kernel_regularizer=_create_if_not_none(l2, l2_reg))(x)
-        #     if bn:
-        #         x = BatchNormalization()(x)
-        #
-        # classifier = Dense(
-        #     units=n_outputs,
-        #     activation='linear',
-        #     kernel_constraint=_create_if_not_none(l2, l2_reg))(x)
-        #
-        # self._keras_model = Model(inputs=base.input, outputs=classifier)
-        # self._prep_fn = prep_fn
+        self._prep_fn = prep_fn
 
 
 def _create_pool_layer(name: str):
