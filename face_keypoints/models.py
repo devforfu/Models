@@ -1,8 +1,10 @@
 import os
 import json
+from itertools import chain
 from datetime import datetime
 from os.path import join, exists
 
+import numpy as np
 import tensorflow as tf
 from keras import backend as K
 from keras.regularizers import l2
@@ -105,6 +107,23 @@ class BaseLandmarksModel:
         if image_coordinates:
             y_pred = self._rescale_landmarks(y_pred)
         return y_pred
+
+    def score(self, folder):
+        gen = AnnotatedImagesGenerator(
+            root=folder,
+            target_size=self.input_shape[:2],
+            infinite=False,
+            augment=False,
+            normalize=False,
+            same_size_batches=False,
+            model_preprocessing=self._prep_fn)
+
+        losses = [
+            self._keras_model.evaluate(*batch, verbose=0)
+            for batch in gen]
+
+        avg_loss = np.mean(losses)
+        return avg_loss
 
     def create_model_folder(self, root: str, subfolder: str=None):
         if subfolder is None:

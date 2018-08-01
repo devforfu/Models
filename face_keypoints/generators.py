@@ -18,6 +18,9 @@ class AnnotatedImagesGenerator:
                  default_probability: float = 0.5, normalize: bool=True,
                  probabilities: dict=None, model_preprocessing=None):
 
+        if not infinite:
+            same_size_batches = False
+
         stream = AnnotatedImagesStream(
             root=root,
             batch_size=batch_size,

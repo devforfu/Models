@@ -36,7 +36,7 @@ def main():
     )
 
     print('Model training with parameters:')
-    pprint(dict(args))
+    pprint(vars(args))
 
     model = PretrainedModel(input_shape=input_shape)
     model.create(
@@ -60,14 +60,16 @@ def main():
                         save_weights_only=False)]
 
     model.train(
+        n_epochs=n_epochs,
         train_folder=LFPW_TRAIN,
         valid_folder=LFPW_VALID,
         callbacks=callbacks,
         normalize=False)
 
-    y_preds = model.predict_generator(LFPW_VALID)
-
-
+    avg_rmse = model.score(LFPW_VALID)
+    print(f'Trained model validation RMSE: {avg_rmse:2.4f}')
+    print(f'The folder with results: {model.subfolder}')
+    print(f'Training history file: {model.history_path}')
 
 
 if __name__ == '__main__':
