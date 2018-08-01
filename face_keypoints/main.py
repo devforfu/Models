@@ -29,10 +29,11 @@ def main():
         dropouts,
         maxnorm,
         l2_reg,
+        patience
     ) = (
         args.input_shape, args.optimizer, args.learning_rate, args.n_epochs,
         args.pool, args.n_dense, args.units, args.patience, args.batch_norm,
-        args.dropouts or [], args.maxnorm, args.l2_reg
+        args.dropouts or [], args.maxnorm, args.l2_reg, args.patience
     )
 
     print('Model training with parameters:')
@@ -54,7 +55,7 @@ def main():
 
     callbacks = [
         CSVLogger(filename=model.history_path),
-        EarlyStopping(patience=5, verbose=1),
+        EarlyStopping(patience=patience, verbose=1),
         ModelCheckpoint(filepath=model.weights_path,
                         save_best_only=True,
                         save_weights_only=False)]
