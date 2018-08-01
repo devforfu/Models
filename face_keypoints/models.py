@@ -7,7 +7,6 @@ from keras import backend as K
 from keras.regularizers import l2
 from keras.constraints import MaxNorm
 from keras.models import Model, load_model
-from keras.callbacks import CSVLogger, EarlyStopping, ModelCheckpoint
 from keras.layers import Input, Flatten
 from keras.layers import Dense, Conv2D, Activation
 from keras.layers import Dropout, BatchNormalization
@@ -144,8 +143,10 @@ class PretrainedModel(BaseLandmarksModel):
 
         x = _create_pool_layer(pool)(base.output)
         for i, n_units in enumerate(units):
-            reg = _create_if_not_none(l2, l2_reg)
-            x = Dense(units=n_units, kernel_regularizer=reg)(x)
+            x = Dense(
+                units=n_units,
+                kernel_regularizer=_create_if_not_none(l2, l2_reg),
+                kernel_constraint=_create_if_not_none(MaxNorm, maxnorm))(x)
             if dropouts:
                 if i < len(dropouts):
                     x = Dropout(dropouts[i])(x)
@@ -156,7 +157,8 @@ class PretrainedModel(BaseLandmarksModel):
         classifier = Dense(
             units=NUM_OF_LANDMARKS*2,
             activation='linear',
-            kernel_regularizer=_create_if_not_none(l2, l2_reg))(x)
+            kernel_regularizer=_create_if_not_none(l2, l2_reg),
+            kernel_constraint=_create_if_not_none(MaxNorm, maxnorm))(x)
 
         model = Model(inputs=base.input, outputs=classifier)
         self._keras_model = model
