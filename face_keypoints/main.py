@@ -40,6 +40,7 @@ def main():
     pprint(vars(args))
 
     model = PretrainedModel(input_shape=input_shape)
+
     model.create(
         *get('inception_resnet_v2'),
         n_dense=n_dense,
@@ -49,9 +50,16 @@ def main():
         dropouts=dropouts,
         maxnorm=maxnorm,
         l2_reg=l2_reg)
-    model.compile(optimizer=optimizer)
-    model.create_model_folder(root=join(MODELS_FOLDER, 'face_landmarks'))
+
+    ok = model.create_model_folder(
+        root=join(MODELS_FOLDER, 'face_landmarks'),
+        subfolder=args.identifier)
+
+    if not ok:
+        sys.exit(1)
+
     model.save_parameters(model.parameters_path)
+    model.compile(optimizer=optimizer)
 
     callbacks = [
         CSVLogger(filename=model.history_path),

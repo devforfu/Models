@@ -1,6 +1,6 @@
 import os
 import json
-from itertools import chain
+import shutil
 from datetime import datetime
 from os.path import join, exists
 
@@ -10,11 +10,9 @@ from keras import backend as K
 from keras.regularizers import l2
 from keras.constraints import MaxNorm
 from keras.models import Model, load_model
-from keras.layers import Input, Flatten
-from keras.layers import Dense, Conv2D, Activation
+from keras.layers import Flatten, Dense
 from keras.layers import Dropout, BatchNormalization
 from keras.layers import GlobalAvgPool2D, GlobalMaxPool2D
-from keras.layers import ZeroPadding2D, MaxPooling2D, AveragePooling2D
 
 from utils import path
 from legacy import LeakyReLU
@@ -128,19 +126,32 @@ class BaseLandmarksModel:
     def create_model_folder(self, root: str, subfolder: str=None):
         if subfolder is None:
             timestamp = datetime.now().strftime('%s')
-            subfolder = path(root, timestamp)
+            folder = path(root, timestamp)
+        else:
+            folder = path(root, subfolder)
 
         template = 'weights_{epoch:03d}_{val_loss:2.4f}.hdf5'
-        history_path = join(subfolder, 'history.csv')
-        weights_path = join(subfolder, template)
-        parameters_path = join(subfolder, 'parameters.json')
-        if not exists(subfolder):
-            os.makedirs(subfolder, exist_ok=True)
+        history_path = join(folder, 'history.csv')
+        weights_path = join(folder, template)
+        parameters_path = join(folder, 'parameters.json')
 
-        self.subfolder = subfolder
+        if exists(folder):
+            print('Model folder already exists. It will be deleted.', end=' ')
+            while True:
+                print('Proceed? [y/n]')
+                response = input().lower().strip()
+                if response in ('y', 'n'):
+                    if response == 'n':
+                        return False
+                    else:
+                        shutil.rmtree(folder)
+
+        os.makedirs(folder, exist_ok=True)
+        self.subfolder = folder
         self.history_path = history_path
         self.weights_path = weights_path
         self.parameters_path = parameters_path
+        return True
 
     def save_parameters(self, filename):
         if self._parameters is None:
@@ -199,7 +210,6 @@ class PretrainedModel(BaseLandmarksModel):
         self._keras_model = model
         self._prep_fn = prep_fn
         self._parameters = parameters
-
 
 
 def _create_pool_layer(name: str):

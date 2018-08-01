@@ -84,6 +84,13 @@ def parse_args(args):
              'If None, then the regularization is not applied.',
         metavar='<L2>'
     )
+    parser.add_argument(
+        '--identifier', '-id', default=None, type=str,
+        help='[default: %(default)s] The unique identifier of the trained '
+             'model. The identifier is only required for further analysis and '
+             'doesn\'t affect training process. If provided then the '
+             'identifier is saved into model folder as a text file.'
+    )
 
     parsed = parser.parse_args(args)
 
