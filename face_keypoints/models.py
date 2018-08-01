@@ -3,7 +3,6 @@ from datetime import datetime
 from os.path import join, exists
 
 import tensorflow as tf
-from keras import layers
 from keras import backend as K
 from keras.regularizers import l2
 from keras.constraints import MaxNorm
@@ -16,6 +15,7 @@ from keras.layers import GlobalAvgPool2D, GlobalMaxPool2D
 from keras.layers import ZeroPadding2D, MaxPooling2D, AveragePooling2D
 
 from utils import path
+from legacy import LeakyReLU
 from config import NUM_OF_LANDMARKS
 from generators import AnnotatedImagesGenerator
 
@@ -129,10 +129,13 @@ class BaseLandmarksModel:
 class PretrainedModel(BaseLandmarksModel):
 
     def create(self, model_fn, prep_fn=None, pool: str='flatten',
-               n_dense: int=5, n_units: int=500,
+               n_dense: int=5, units: int=500,
                n_outputs: int=NUM_OF_LANDMARKS*2, freeze: bool=True,
-               bn: bool=True, dropout: float=0.25, maxnorm: int=3,
+               bn: bool=True, dropouts: float=0.25, maxnorm: int=3,
                l2_reg: float=0.001):
+
+        units = _as_list(units, n_dense, extend=True)
+        dropouts = _as_list(dropouts, n_dense)
 
         base = model_fn(self.input_shape)
         if freeze:
@@ -140,15 +143,21 @@ class PretrainedModel(BaseLandmarksModel):
                 layer.trainable = False
 
         x = _create_pool_layer(pool)(base.output)
-        for _ in range(n_dense):
-            x = Dense(units=n_units)(x)
-            if dropout is not None:
-                x = Dropout(dropout)(x)
+        for i, n_units in enumerate(units):
+            reg = _create_if_not_none(l2, l2_reg)
+            x = Dense(units=n_units, kernel_regularizer=reg)(x)
+            if dropouts:
+                if i < len(dropouts):
+                    x = Dropout(dropouts[i])(x)
             if bn:
                 x = BatchNormalization()(x)
-            x = Activation('relu')(x)
+            x = LeakyReLU()(x)
 
-        classifier = Dense(units=NUM_OF_LANDMARKS*2, activation='linear')(x)
+        classifier = Dense(
+            units=NUM_OF_LANDMARKS*2,
+            activation='linear',
+            kernel_regularizer=_create_if_not_none(l2, l2_reg))(x)
+
         model = Model(inputs=base.input, outputs=classifier)
         self._keras_model = model
         self._prep_fn = prep_fn
@@ -169,3 +178,16 @@ def _create_pool_layer(name: str):
 
 def _create_if_not_none(cls, value):
     return None if value is None else cls(value)
+
+
+def _as_list(value, length, extend=False):
+    if not value:
+        return value
+    if isinstance(value, int):
+        value = [value] * length
+    elif hasattr(value, '__len__'):
+        value = list(value)
+        if extend:
+            while len(value) < length:
+                value.append(value[-1])
+    return value

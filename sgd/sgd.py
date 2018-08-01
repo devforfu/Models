@@ -47,7 +47,7 @@ def main():
         for epoch in range(1, epochs + 1):
             if stop_training:
                 break
-x
+
             epoch_loss = 0.0
             learning_rate = schedule(epoch)
             index = np.random.permutation(num_samples)
