@@ -1,5 +1,6 @@
 import sys
 from os.path import join
+from pprint import pprint
 
 from keras import backend as K
 from keras.callbacks import CSVLogger, EarlyStopping, ModelCheckpoint
@@ -34,6 +35,9 @@ def main():
         args.dropouts or [], args.maxnorm, args.l2_reg
     )
 
+    print('Model training with parameters:')
+    pprint(dict(args))
+
     model = PretrainedModel(input_shape=input_shape)
     model.create(
         *get('inception_resnet_v2'),
@@ -46,6 +50,7 @@ def main():
         l2_reg=l2_reg)
     model.compile(optimizer=optimizer)
     model.create_model_folder(root=join(MODELS_FOLDER, 'face_landmarks'))
+    model.save_parameters(model.parameters_path)
 
     callbacks = [
         CSVLogger(filename=model.history_path),
@@ -61,7 +66,6 @@ def main():
         normalize=False)
 
     y_preds = model.predict_generator(LFPW_VALID)
-
 
 
 

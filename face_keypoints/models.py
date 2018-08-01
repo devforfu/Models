@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 from os.path import join, exists
 
@@ -42,8 +43,10 @@ class BaseLandmarksModel:
         self.subfolder = None
         self.history_path = None
         self.weights_path = None
+        self.parameters_path = None
         self._keras_model = None
         self._prep_fn = None
+        self._parameters = None
 
     def create(self, *args, **kwargs):
         raise NotImplementedError()
@@ -111,12 +114,20 @@ class BaseLandmarksModel:
         template = 'weights_{epoch:03d}_{val_loss:2.4f}.hdf5'
         history_path = join(subfolder, 'history.csv')
         weights_path = join(subfolder, template)
+        parameters_path = join(subfolder, 'parameters.json')
         if not exists(subfolder):
             os.makedirs(subfolder, exist_ok=True)
 
         self.subfolder = subfolder
         self.history_path = history_path
         self.weights_path = weights_path
+        self.parameters_path = parameters_path
+
+    def save_parameters(self, filename):
+        if self._parameters is None:
+            return
+        with open(filename, 'w') as file:
+            json.dump(self._parameters, file)
 
     def _rescale_landmarks(self, y):
         target_size = self.input_shape[:2]
@@ -160,9 +171,16 @@ class PretrainedModel(BaseLandmarksModel):
             kernel_regularizer=_create_if_not_none(l2, l2_reg),
             kernel_constraint=_create_if_not_none(MaxNorm, maxnorm))(x)
 
+        parameters = dict(
+            pool=pool, n_dense=n_dense, units=units, n_outputs=n_outputs,
+            freeze=freeze, bn=bn, dropouts=dropouts, maxnorm=maxnorm,
+            l2_reg=l2_reg)
+
         model = Model(inputs=base.input, outputs=classifier)
         self._keras_model = model
         self._prep_fn = prep_fn
+        self._parameters = parameters
+
 
 
 def _create_pool_layer(name: str):
