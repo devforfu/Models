@@ -72,8 +72,7 @@ def main():
         n_epochs=n_epochs,
         train_folder=LFPW_TRAIN,
         valid_folder=LFPW_VALID,
-        callbacks=callbacks,
-        normalize=False)
+        callbacks=callbacks)
 
     avg_rmse = model.score(LFPW_VALID)
     print(f'Trained model validation RMSE: {avg_rmse:2.4f}')

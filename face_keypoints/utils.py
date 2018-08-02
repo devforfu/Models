@@ -1,11 +1,29 @@
 import os
 import re
+import math
 from pathlib import Path
 from itertools import chain
 from os.path import join, expanduser, expandvars, abspath
 
 import cv2 as cv
 import numpy as np
+import matplotlib.pyplot as plt
+
+
+def calculate_layout(num_axes, n_rows=None, n_cols=None):
+    """Calculates number of rows/columns required to fit `num_axes` plots
+    onto figure if specific number of columns/rows is specified.
+    """
+    if n_rows is not None and n_cols is not None:
+        raise ValueError(
+            'cannot derive number of rows/columns if both values provided')
+    if n_rows is None and n_cols is None:
+        n_cols = 2
+    if n_rows is None:
+        n_rows = max(1, math.ceil(num_axes / n_cols))
+    else:
+        n_cols = max(1, math.ceil(num_axes / n_rows))
+    return n_rows, n_cols
 
 
 def imread(filename):
@@ -141,3 +159,24 @@ def best_checkpoint_path(root):
 
 def path(part, *parts):
     return abspath(expandvars(expanduser(join(part, *parts))))
+
+
+def show_images(images, pts_pred, pts_true=None, n_cols=4, cmap=None):
+    n_rows, n_cols = calculate_layout(len(images), n_cols=n_cols)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 12))
+    axes = axes.flatten()
+
+    for ax in axes:
+        ax.set_axis_off()
+
+    for i, (img, pts, ax) in enumerate(zip(images, pts_pred, axes)):
+        xs, ys = split_xy(pts)
+        if img.shape[-1] == 1:
+            img = img.reshape(img.shape[0], img.shape[1])
+            cmap = 'gray'
+        ax.imshow(img, cmap=cmap)
+        ax.set_title(img.shape)
+        ax.scatter(xs, ys, color='darkorange', edgecolor='white', s=20)
+        if pts_true is not None:
+            ax.scatter(*split_xy(pts_true[i]),
+                       color='royalblue', edgecolor='white', s=20)

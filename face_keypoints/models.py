@@ -20,22 +20,6 @@ from config import NUM_OF_LANDMARKS
 from generators import AnnotatedImagesGenerator
 
 
-def reset_session():
-    tf.reset_default_graph()
-    session = tf.InteractiveSession()
-    K.set_session(session)
-    K.set_image_dim_ordering('tf')
-
-
-def root_mean_squared_error(y_true, y_pred):
-    return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
-
-
-def load_custom_model(path):
-    return load_model(path, custom_objects={
-        'root_mean_squared_error': root_mean_squared_error})
-
-
 class BaseLandmarksModel:
 
     def __init__(self, input_shape):
@@ -145,6 +129,7 @@ class BaseLandmarksModel:
                         return False
                     else:
                         shutil.rmtree(folder)
+                        break
 
         os.makedirs(folder, exist_ok=True)
         self.subfolder = folder
@@ -210,6 +195,23 @@ class PretrainedModel(BaseLandmarksModel):
         self._keras_model = model
         self._prep_fn = prep_fn
         self._parameters = parameters
+
+
+def reset_session():
+    tf.reset_default_graph()
+    session = tf.InteractiveSession()
+    K.set_session(session)
+    K.set_image_dim_ordering('tf')
+
+
+def root_mean_squared_error(y_true, y_pred):
+    return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
+
+
+def load_custom_model(path):
+    return load_model(path, custom_objects={
+        'root_mean_squared_error': root_mean_squared_error,
+        'LeakyReLU': LeakyReLU})
 
 
 def _create_pool_layer(name: str):
