@@ -96,7 +96,7 @@ class BaseLandmarksModel:
             target_size=self.input_shape[:2],
             infinite=False,
             augment=False,
-            normalize=False,
+            normalize=True,
             same_size_batches=False,
             model_preprocessing=self._prep_fn)
 
