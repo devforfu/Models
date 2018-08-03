@@ -7,12 +7,14 @@ from os.path import join, exists
 import numpy as np
 import tensorflow as tf
 from keras import backend as K
+from keras import layers
 from keras.regularizers import l2
 from keras.constraints import MaxNorm
 from keras.models import Model, load_model
-from keras.layers import Flatten, Dense
+from keras.layers import Input, Flatten
+from keras.layers import Conv2D, Dense, MaxoutDense
 from keras.layers import Dropout, BatchNormalization
-from keras.layers import GlobalAvgPool2D, GlobalMaxPool2D
+from keras.layers import MaxPool2D, GlobalAvgPool2D, GlobalMaxPool2D
 
 from utils import path
 from legacy import LeakyReLU
@@ -195,6 +197,82 @@ class PretrainedModel(BaseLandmarksModel):
         self._keras_model = model
         self._prep_fn = prep_fn
         self._parameters = parameters
+
+
+class ResNet34(BaseLandmarksModel):
+
+    def create(self, pool: str='flatten', n_outputs: int=NUM_OF_LANDMARKS * 2,
+               n_top: int=5, units: int=500, l2_reg: float=0.001):
+
+        input_tensor = Input(self.input_shape)
+
+        x = Conv2D(64, (7, 7), strides=2)(input_tensor)
+        x = LeakyReLU()(x)
+        x = MaxPool2D(strides=2)(x)
+
+        x = identity(x, 64, 3)
+        x = identity(x, 64, 3)
+        x = identity(x, 64, 3)
+
+        x = upsampling(x, 128, 3)
+        x = identity(x, 128, 3)
+        x = identity(x, 128, 3)
+        x = identity(x, 128, 3)
+        x = identity(x, 128, 3)
+
+        x = upsampling(x, 256, 3)
+        x = identity(x, 256, 3)
+        x = identity(x, 256, 3)
+        x = identity(x, 256, 3)
+        x = identity(x, 256, 3)
+        x = identity(x, 256, 3)
+
+        x = upsampling(x, 512, 3)
+        x = identity(x, 512, 3)
+        x = identity(x, 512, 3)
+
+        units = _as_list(units, n_top, extend=True)
+        x = _create_pool_layer(pool)(x)
+        for n_units in units:
+            reg = _create_if_not_none(l2, l2_reg)
+            x = MaxoutDense(n_units, W_regularizer=reg)(x)
+            x = BatchNormalization()(x)
+            x = LeakyReLU()(x)
+
+        x = Dense(n_outputs, activation='linear')(x)
+        model = Model(inputs=input_tensor, outputs=x)
+        self._keras_model = model
+
+
+def identity(tensor, n_filters, kernel):
+    shortcut = BatchNormalization()(tensor)
+
+    x = Conv2D(n_filters, kernel, padding='same')(tensor)
+    x = BatchNormalization()(x)
+    x = LeakyReLU()(x)
+
+    x = Conv2D(n_filters)(x)
+    x = BatchNormalization()(x)
+
+    x = layers.add([x, shortcut])
+    x = LeakyReLU()(x)
+    return x
+
+
+def upsampling(tensor, n_filters, kernel, strides=2):
+    shortcut = Conv2D(n_filters, 1, strides=strides, padding='same')(tensor)
+    shortcut = BatchNormalization()(shortcut)
+
+    x = Conv2D(n_filters, kernel, strides=strides, padding='same')(tensor)
+    x = BatchNormalization()(x)
+    x = LeakyReLU()(x)
+
+    x = Conv2D(n_filters, kernel, padding='same')(x)
+    x = BatchNormalization()(x)
+
+    x = layers.add([x, shortcut])
+    x = LeakyReLU()(x)
+    return x
 
 
 def reset_session():

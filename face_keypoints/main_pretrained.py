@@ -32,10 +32,10 @@ def main():
         l2_reg,
         patience
     ) = (
-        args.architecture, args.input_shape, args.optimizer, args.learning_rate,
-        args.n_epochs, args.pool, args.n_dense, args.units, args.patience,
-        args.batch_norm, args.dropouts or [], args.maxnorm, args.l2_reg,
-        args.patience
+        args.architecture, args.input_shape, args.optimizer,
+        args.learning_rate, args.n_epochs, args.pool, args.n_dense, args.units,
+        args.patience, args.batch_norm, args.dropouts or [], args.maxnorm,
+        args.l2_reg, args.patience
     )
 
     print('Model training with parameters:')

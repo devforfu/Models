@@ -179,4 +179,4 @@ def show_images(images, pts_pred, pts_true=None, n_cols=4, cmap=None):
         ax.scatter(xs, ys, color='darkorange', edgecolor='white', s=20)
         if pts_true is not None:
             ax.scatter(*split_xy(pts_true[i]),
-                       color='royalblue', edgecolor='white', s=20)
+                       color='royalblue', edgecolor='white', alpha=0.75, s=15)
