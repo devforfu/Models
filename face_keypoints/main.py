@@ -17,6 +17,7 @@ K.set_image_dim_ordering('tf')
 def main():
     args = parse_args(args=sys.argv[1:])
     (
+        architecture,
         input_shape,
         optimizer,
         learning_rate,
@@ -31,9 +32,10 @@ def main():
         l2_reg,
         patience
     ) = (
-        args.input_shape, args.optimizer, args.learning_rate, args.n_epochs,
-        args.pool, args.n_dense, args.units, args.patience, args.batch_norm,
-        args.dropouts or [], args.maxnorm, args.l2_reg, args.patience
+        args.architecture, args.input_shape, args.optimizer, args.learning_rate,
+        args.n_epochs, args.pool, args.n_dense, args.units, args.patience,
+        args.batch_norm, args.dropouts or [], args.maxnorm, args.l2_reg,
+        args.patience
     )
 
     print('Model training with parameters:')
@@ -42,7 +44,7 @@ def main():
     model = PretrainedModel(input_shape=input_shape)
 
     model.create(
-        *get('inception_resnet_v2'),
+        *get(architecture),
         n_dense=n_dense,
         pool=pool,
         units=units,

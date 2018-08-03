@@ -1,8 +1,12 @@
 import argparse
 
-
 def parse_args(args):
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--architecture', '-arch', required=True,
+        help='The pretrained network architecture',
+        metavar='<ARCH>'
+    )
     parser.add_argument(
         '--input-shape', '-i', required=True, type=valid_shape,
         help='[default: %(default)s] The shape of input tensor '

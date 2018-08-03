@@ -1,10 +1,13 @@
 def get(name):
-    keras_model_fn, prep_fn = {
-        'inception_resnet_v2': inception_resnet_v2,
-        'xception': xception,
-        'inception_v3': inception_v3,
-        'resnet50': resnet50
-    }[name]()
+    try:
+        keras_model_fn, prep_fn = {
+            'inception_resnet_v2': inception_resnet_v2,
+            'xception': xception,
+            'inception_v3': inception_v3,
+            'resnet50': resnet50
+        }[name]()
+    except KeyError:
+        raise ValueError('unknown architecture: %s' % name)
 
     def partial(x):
         return keras_model_fn(
