@@ -11,7 +11,7 @@ from keras import layers
 from keras.regularizers import l2
 from keras.constraints import MaxNorm
 from keras.models import Model, load_model
-from keras.layers import Input, Flatten
+from keras.layers import Input, Flatten, Maximum
 from keras.layers import Conv2D, Dense, MaxoutDense
 from keras.layers import Dropout, BatchNormalization
 from keras.layers import MaxPool2D, GlobalAvgPool2D, GlobalMaxPool2D
@@ -234,10 +234,7 @@ class ResNet34(BaseLandmarksModel):
         units = _as_list(units, n_top, extend=True)
         x = _create_pool_layer(pool)(x)
         for n_units in units:
-            reg = _create_if_not_none(l2, l2_reg)
-            x = MaxoutDense(n_units, W_regularizer=reg)(x)
-            x = BatchNormalization()(x)
-            x = LeakyReLU()(x)
+            x = maxout_dense(x, n_units, 4, l2_reg)
 
         x = Dense(n_outputs, activation='linear')(x)
         model = Model(inputs=input_tensor, outputs=x)
@@ -251,7 +248,7 @@ def identity(tensor, n_filters, kernel):
     x = BatchNormalization()(x)
     x = LeakyReLU()(x)
 
-    x = Conv2D(n_filters)(x)
+    x = Conv2D(n_filters, kernel, padding='same')(x)
     x = BatchNormalization()(x)
 
     x = layers.add([x, shortcut])
@@ -271,6 +268,16 @@ def upsampling(tensor, n_filters, kernel, strides=2):
     x = BatchNormalization()(x)
 
     x = layers.add([x, shortcut])
+    x = LeakyReLU()(x)
+    return x
+
+
+def maxout_dense(x, n_units, n_layers, l2_reg=None):
+    dense_list = [
+        Dense(n_units, kernel_regularizer=_create_if_not_none(l2, l2_reg))(x)
+        for _ in range(n_layers)]
+    x = Maximum()(dense_list)
+    x = BatchNormalization()(x)
     x = LeakyReLU()(x)
     return x
 
